@@ -1,5 +1,5 @@
 import pyxel
-
+#ffff
 screen_width = 400
 screen_height = 300
 
