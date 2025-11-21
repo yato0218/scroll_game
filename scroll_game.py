@@ -1,10 +1,10 @@
 import pyxel
-#ffff
+
 screen_width = 400
 screen_height = 300
 
 class Background:
-    def init(self):
+    def __init__(self):
         pass
 
     def update(self):
@@ -14,7 +14,7 @@ class Background:
         pass
 
 class Player:
-    def init(self, x, y):
+    def __init__(self, x, y):
         self.x = x
         self.y = y
         self.speed = 5
@@ -50,7 +50,7 @@ class Bullet:
 
 
 class App:
-    def init(self):
+    def __init__(self):
         pyxel.init(screen_width, screen_height, title = "scroll_game")
         pyxel.load("my_resource.pyxres")
         self.player = Player(screen_width // 2, screen_height // 2)
@@ -68,6 +68,7 @@ class App:
     def draw(self):
         pyxel.cls(0)
         self.player.draw()
+
 
 
 App()
