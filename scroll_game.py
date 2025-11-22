@@ -16,25 +16,30 @@ class Background:
 class Player:
     def __init__(self, x, y):
         self.x = x
+        self.x_min = screen_width // 2 - 50
+        self.x_max = screen_width // 2 + 50 -4
+        
         self.y = y
         self.speed = 5
         self.right = 0
         self.left = 0
 
     def update(self):
-        if pyxel.btn(pyxel.KEY_RIGHT) and screen_width // 2 - 50 <= self.x <= screen_width // 2 + 50:
+        self.x = min(self.x, self.x_max)
+        self.x = max(self.x_min, min(self.x, self.x_max))
+        if pyxel.btn(pyxel.KEY_RIGHT):
             self.x += self.speed
             self.right += 1
 
-        if pyxel.btn(pyxel.KEY_LEFT) and screen_width // 2 - 50 <= self.x <= screen_width // 2 + 50:
+        if pyxel.btn(pyxel.KEY_LEFT):
             self.x -= self.speed
             self.left += 1
 
-        if screen_width // 2 - 50 > self.x:
-            self.x = screen_width // 2 - 50
+        # if screen_width // 2 - 50 > self.x:
+        #     self.x = screen_width // 2 - 50
 
-        if self.x > screen_width // 2 + 50:
-            self.x = screen_width // 2 + 50
+        # if self.x > screen_width // 2 + 50:
+        #     self.x = screen_width // 2 + 50
 
 
 
