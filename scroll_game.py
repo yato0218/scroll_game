@@ -3,79 +3,106 @@ import pyxel
 screen_width = 400
 screen_height = 300
 
+SCENE_TITLE = 0
+SCENE_PLAY = 1
+SCENE_GAME_OVER = 2
+
+PLAYER_SIZE_X = 8
+PLAYER_SIZE_Y = 8
+
 class Player:
     def __init__(self, x, y):
-        self.size_x = 8
-        self.size_y = 8
-        self.x = x  # これはワールド全体の座標
+        self.x = x
         self.y = y
-        self.speed = 5
-        # 画面内の動ける範囲（この範囲を超えるとスクロール）
-        self.margin_left = 100
-        self.margin_right = 300
-
-    def update(self, scroll_x):
-        if pyxel.btn(pyxel.KEY_RIGHT):
-            self.x += self.speed
-        if pyxel.btn(pyxel.KEY_LEFT):
-            self.x -= self.speed
-            
-        # 左端に行き過ぎないように制限
-        self.x = max(self.x, self.size_x // 2)
-
-        # プレイヤーの画面上での座標を計算して、スクロール量を決める
-        self.display_x = self.x - scroll_x
-        
-        if self.display_x > self.margin_right:
-            scroll_x = self.x - self.margin_right
-        elif self.display_x < self.margin_left:
-            scroll_x = max(0, self.x - self.margin_left)
-
-        # プレイヤーの画面上での座標を計算して、スクロール量を決める
-        self.display_x = self.x - scroll_x
-            
-        return scroll_x
-    
-        
-
-    def draw(self, display_x):
-        # 描画するときだけscroll_xを引く
-        pyxel.blt(self.display_x - self.size_x // 2, self.y - self.size_y // 2, 0, 0, 0, self.size_x, self.size_y, pyxel.COLOR_BLACK)
-        pyxel.line(100, 0, 100, screen_height, pyxel.COLOR_ORANGE)
-        pyxel.line(300, 0, 300, screen_height, pyxel.COLOR_ORANGE)
+    def update(self):
+        pass
+    def draw(self):
+        pyxel.blt(self.x, self.y, 0, 0, 0, PLAYER_SIZE_X, PLAYER_SIZE_Y, pyxel.COLOR_BLACK)
+        # pyxel.blt(x, y, img, u, v, w, h, colkey=None, rotate=0, scale=1)
+        #text(x, y, s, col, font=None)
+        pyxel.text(10,10, f"Game Start", pyxel.COLOR_LIME)
 
 class Background:
-    def __init__(self, player):
-        self.player = player
+    def __init__(self):
+        pass
+    def update(self):
+        pass
+    def draw(self):
+        pass
 
-    def draw(self, scroll_x):
-        pyxel.cls(0)
-        # スクロールを確認するための目印（地面や柱など）
-        # 40ピクセルごとに線を引く例
-        for i in range(20):
-            line_x = i * 100 - (scroll_x % 100) # ループ背景のテクニック
-            pyxel.line(line_x, 0, line_x, screen_height, pyxel.COLOR_LIME)
-        
-        pyxel.text(15, 15, f"scroll_x: {scroll_x}", pyxel.COLOR_GREEN)
-        pyxel.text(15, 25, f"display_x: {self.player.display_x}", pyxel.COLOR_GREEN)
-        pyxel.text(15, 35, f"self.x   : {self.player.x}", pyxel.COLOR_GREEN)
 class App:
     def __init__(self):
-        pyxel.init(screen_width, screen_height, title="side_scroll_game")
-        pyxel.load("my_resource.pyxres") # リソースがある場合は有効に
-        self.player = Player(screen_width // 2, screen_height // 2)
-        self.background = Background(self.player)
-        self.scroll_x = 0
+        pyxel.init(screen_width, screen_height, title = "scroll_game")
+        pyxel.mouse(True)
+        pyxel.load("my_resource.pyxres")
+        self.player = Player(screen_width // 3, screen_height // 5 * 2)
+        self.background = Background()
+
+        self.scene = SCENE_TITLE
+
         pyxel.run(self.update, self.draw)
 
     def update(self):
-        if pyxel.btn(pyxel.KEY_Q):
+        if pyxel.btnp(pyxel.KEY_Q):
             pyxel.quit()
-        # updateから新しいscroll_xを受け取る
-        self.scroll_x = self.player.update(self.scroll_x)
+
+        if self.scene == SCENE_TITLE:
+            self.update_title_scene()
+        elif self.scene == SCENE_PLAY:
+            self.update_play_scene()
+        elif self.scene == SCENE_GAME_OVER:
+            self.update_game_over_scene()
+
+    def update_title_scene(self):
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            self.scene = SCENE_PLAY
+    def update_play_scene(self):
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            self.scene = SCENE_GAME_OVER
+        
+        self.background.update()
+        self.player.update()
+
+    def update_game_over_scene(self):
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            self.scene = SCENE_TITLE
+        
+
+
+    
+
+
+
+
 
     def draw(self):
-        self.background.draw(self.scroll_x)
-        self.player.draw(self.scroll_x)
+        pyxel.cls(0)
+
+        if self.scene == SCENE_TITLE:
+            self.draw_title_scene()
+        elif self.scene == SCENE_PLAY:
+            self.draw_play_scene()
+        elif self.scene == SCENE_GAME_OVER:
+            self.draw_game_over_scene()
+
+    def draw_title_scene(self):
+        pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Click To Start", pyxel.COLOR_LIME)
+
+    def draw_play_scene(self):
+        pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Play", pyxel.COLOR_LIME)
+
+        self.background.draw()
+        self.player.draw()
+
+    def draw_game_over_scene(self):
+        pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Game Over", pyxel.COLOR_LIME)
+        
+
+
+
+
+
+
+        
 
 App()
