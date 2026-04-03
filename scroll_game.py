@@ -11,6 +11,7 @@ SCENE_GAME_OVER = 2
 bullets = []
 BULLET_SIZE_X = 8
 BULLET_SIZE_Y = 8
+BULLET_SPEED_X = 10
 
 PLAYER_SIZE_X = 16
 PLAYER_SIZE_Y = 16
@@ -19,17 +20,57 @@ PLAYER_JUMP = 12
 GRAVITY = 9.8
 dt = 0.1
 
+#今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
+#書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
+def entities_update(entities):
+        for entity in entities:
+            entity.update()
+
+def entities_draw(entities):
+        for entity in entities:
+            entity.draw()
+            pyxel.text(10, 40, f"bullets: {len(bullets)}", pyxel.COLOR_GREEN)
+
+def entities_cleanup(entities):
+    # entities[:]は引数entitiesのリストの中身を全部出して,右側の値([]の中身)をentitiesのリストに入れなおすというものである
+    # = [a for b in c if xxx] について. これは cというリストから1つ取り出し,bと名付ける. その後,xxxの条件に当てはまるものをaに変換してに入れる
+    # そして,右辺を丸ごと囲む[]はリスト.そして[]にaを入れる.
+    # aはbと同じものを入れるとentitiesから取り出したentityのなかで条件式を満たすentityがそのまま右辺の[]に入る.
+    # a.xとしたり,a.x * 2などとするとentityが持っているxというインスタンス変数を右辺の[]に入れたり,その2倍の値を入れることができる
+    entities[:] = [entity for entity in entities if entity.is_alive]
+    # entities[:] = [entity.x for entity in entities if entity.is_alive]
+
+
 class Bullet:
-    def __init__(self, x, y):
+    def __init__(self, x, y, right):
         self.x = x
         self.y = y
+        self.is_right = right
+        self.is_alive = True
+        if self.is_right:
+            self.direction_x = 1
+        else:
+            self.direction_x = -1
         
         bullets.append(self)
 
     def update(self):
-        self.x += 10
+        if self.is_alive:
+            self.x += BULLET_SPEED_X * self.direction_x
+
+        if not 0 < self.x < screen_width:
+            self.is_alive = False
+        if not 0 < self.y < screen_height:
+            self.is_alive = False
+        
+
+
     def draw(self):
-        pyxel.blt(self.x, self.y, 1, 0, 0, BULLET_SIZE_X, BULLET_SIZE_Y, pyxel.COLOR_BLACK)
+        if self.is_alive:
+            if self.is_right:
+                pyxel.blt(self.x, self.y, 1, 0, 0, BULLET_SIZE_X, BULLET_SIZE_Y, pyxel.COLOR_BLACK)
+            else:
+                pyxel.blt(self.x, self.y, 1, 0, 0, -BULLET_SIZE_X, BULLET_SIZE_Y, pyxel.COLOR_BLACK)
 
 
 class Player:
@@ -42,7 +83,7 @@ class Player:
         self.pre_vx = 0
         self.vx = 0
 
-        self.right = True
+        self.is_right = True
 
         #init以外の関数で使う場合、selfを入れること
         self.jump_count = 0
@@ -60,10 +101,10 @@ class Player:
 
         if pyxel.btn(pyxel.KEY_RIGHT):
             direction_x += 1
-            self.right = True
+            self.is_right = True
         if pyxel.btn(pyxel.KEY_LEFT):
             direction_x += -1
-            self.right = False
+            self.is_right = False
         if self.jump_count < self.jump_max:
             if pyxel.btnp(pyxel.KEY_UP):
                 #最初は self.vy -= PLAYER_JUMP としていたが、これでは2回目のジャンプ時にプレイヤーが上昇中か下降中かでself.vyの状態が違うため2回目のジャンプの度合いが一定ではなくなる
@@ -89,7 +130,10 @@ class Player:
             self.x += self.vx
 
         if pyxel.btn(pyxel.KEY_SPACE):
-            Bullet(self.x + PLAYER_SIZE_X, self.y + PLAYER_SIZE_Y // 4)
+            if self.is_right:
+                Bullet(self.x + PLAYER_SIZE_X, self.y + PLAYER_SIZE_Y // 4, self.is_right)
+            else:
+                Bullet(self.x - PLAYER_SIZE_X // 2, self.y + PLAYER_SIZE_Y // 4, self.is_right)
 
 
         
@@ -97,17 +141,17 @@ class Player:
 
 
     def draw(self):
-        if self.vx == 0 and self.right and self.vy == 0:
+        if self.vx == 0 and self.is_right and self.vy == 0:
             self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
             u = self.player_current_frame * 16
             pyxel.blt(self.x, self.y, 0, u, 0, PLAYER_SIZE_X, PLAYER_SIZE_Y, pyxel.COLOR_BLACK)
-        elif self.vx == 0 and not self.right and self.vy == 0:
+        elif self.vx == 0 and not self.is_right and self.vy == 0:
             self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
             u = self.player_current_frame * 16
             pyxel.blt(self.x, self.y, 0, u, 0, - PLAYER_SIZE_X, PLAYER_SIZE_Y, pyxel.COLOR_BLACK)
-        elif self.vx >= 0 and self.right:
+        elif self.vx >= 0 and self.is_right:
             pyxel.blt(self.x, self.y, 0, 0, 0, PLAYER_SIZE_X, PLAYER_SIZE_Y, pyxel.COLOR_BLACK)
-        elif self.vx <= 0 and not self.right:
+        elif self.vx <= 0 and not self.is_right:
             pyxel.blt(self.x, self.y, 0, 0, 0, -PLAYER_SIZE_X, PLAYER_SIZE_Y, pyxel.COLOR_BLACK)#キャラの向きを左右反転させるため-PLAYER_SIZE_X
         # pyxel.blt(x, y, img, u, v, w, h, colkey=None, rotate=0, scale=1)
         #text(x, y, s, col, font=None)
@@ -156,11 +200,25 @@ class App:
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.scene = SCENE_GAME_OVER
 
-        for bullet in bullets:
-            bullet.update()
         
         self.background.update()
         self.player.update()
+
+        #一応これは残しておく.Bulletクラスのオブジェクトたちは生成されたときにbullets.appendでbulletsリストへ入っている。
+        # このリストはBulletクラスのオブジェクトが入っているため、forでbulletという変数の箱にbulletsのリストを1つずつ入れ
+        #.update()とするとBulletクラスのupdate()が呼び出される.
+        # for bullet in bullets:
+        #     bullet.update()
+        
+        
+        #上記のbulletクラスのupdate()の使い方を踏まえて,関数をつくる.
+        #今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
+        #書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
+        entities_update(bullets)
+
+        entities_cleanup(bullets)
+        
+        
 
         
 
@@ -194,9 +252,10 @@ class App:
 
         self.background.draw()
         self.player.draw()
-        
-        for bullet in bullets:
-            bullet.draw()
+
+        entities_draw(bullets)
+        # for bullet in bullets:
+        #     bullet.draw()
 
     def draw_game_over_scene(self):
         pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Game Over", pyxel.COLOR_LIME)
