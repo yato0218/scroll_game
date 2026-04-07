@@ -15,9 +15,9 @@ BULLET_SIZE_Y = 8
 BULLET_SPEED_X = 10
 
 enemies = []
-ENEMIES_MAX_NUM = 4
-ENEMY_SIZE_X = 20
-ENEMY_SIZE_Y = 20
+ENEMIES_MAX_NUM = 1
+ENEMY_SIZE_X = 64
+ENEMY_SIZE_Y = 64
 
 PLAYER_SIZE_X = 16
 PLAYER_SIZE_Y = 16
@@ -37,7 +37,7 @@ def entities_draw(entities):
             entity.draw()
             pyxel.text(10, 40, f"bullets: {len(bullets)}", pyxel.COLOR_GREEN)
 
-def entities_is_crash(entities_1, entities_2):
+def entities_check_collisions(entities_1, entities_2):
         for entity_1 in entities_1:
             for entity_2 in entities_2:
                 if not entity_1.is_alive or not entity_2.is_alive:
@@ -67,6 +67,7 @@ class Bullet:
         self.w = BULLET_SIZE_X
         self.h = BULLET_SIZE_Y
         self.is_right = right
+        self.is_collision = True
         self.is_alive = True
         if self.is_right:
             self.direction_x = 1
@@ -99,13 +100,18 @@ class Enemy:
         self.y = y
         self.w = ENEMY_SIZE_X
         self.h = ENEMY_SIZE_Y
+        self.is_collision = True
         self.is_alive = True
         enemies.append(self)
+        self.frame_interval = 10
+        self.current_frame = 0
+        self.frame_num = 4
     def update(self):
-        pass
+        self.current_frame = (pyxel.frame_count // self.frame_interval) % self.frame_num
            
     def draw(self):
-        pyxel.rect(self.x, self.y, self.w, self.h, pyxel.COLOR_LIGHT_BLUE)
+        
+        pyxel.blt(self.x, self.y, 2, self.current_frame * 64, 64, - self.w, self.h, pyxel.COLOR_BLACK)
 
 class Player:
     def __init__(self, x, y):
@@ -120,6 +126,8 @@ class Player:
         self.vx = 0
 
         self.is_right = True
+        self.is_collision = True
+        self.is_alive = True
 
         #init以外の関数で使う場合、selfを入れること
         self.jump_count = 0
@@ -165,16 +173,16 @@ class Player:
             self.vx = (direction_x  / lengh) * PLAYER_SPEED #(direction_x  / lengh)はcosθ
             self.x += self.vx
 
-        if pyxel.btn(pyxel.KEY_SPACE):
+        if pyxel.btnp(pyxel.KEY_SPACE):
             if self.is_right:
                 Bullet(self.x + self.w, self.y + self.h // 4, self.is_right)
             else:
                 Bullet(self.x - self.w // 2, self.y + self.h // 4, self.is_right)
 
         if pyxel.frame_count % 60 == 0:
-            if len(enemies) <= ENEMIES_MAX_NUM:
-                Enemy(random.randint(screen_width // 10 * 7, screen_width // 10 * 9),
-                      random.randint(screen_height // 10 * 5, screen_height // 10 * 7))
+            if len(enemies) < ENEMIES_MAX_NUM:
+                Enemy(random.randint(screen_width // 10 * 4, screen_width // 10 * 5),
+                      random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
                  
 
         
@@ -258,7 +266,7 @@ class App:
         #上記のbulletクラスのupdate()の使い方を踏まえて,関数をつくる.
         #今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
         #書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
-        entities_is_crash(bullets, enemies)
+        entities_check_collisions(bullets, enemies)
         entities_update(bullets)
         entities_update(enemies)
         
