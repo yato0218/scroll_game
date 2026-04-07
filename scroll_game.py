@@ -14,11 +14,12 @@ BULLET_SIZE_X = 8
 BULLET_SIZE_Y = 8
 BULLET_SPEED_X = 10
 
-enemies = []
-ENEMIES_MAX_NUM = 1
-ENEMY_SIZE_X = 64
-ENEMY_SIZE_Y = 64
+boss = []
+boss_MAX_NUM = 1
+BOSS_SIZE_X = 64
+BOSS_SIZE_Y = 64
 
+players = []
 PLAYER_SIZE_X = 16
 PLAYER_SIZE_Y = 16
 PLAYER_SPEED = 5
@@ -35,7 +36,7 @@ def entities_update(entities):
 def entities_draw(entities):
         for entity in entities:
             entity.draw()
-            pyxel.text(10, 40, f"bullets: {len(bullets)}", pyxel.COLOR_GREEN)
+            
 
 def entities_check_collisions(entities_1, entities_2):
         for entity_1 in entities_1:
@@ -46,8 +47,9 @@ def entities_check_collisions(entities_1, entities_2):
                     entity_2.x <= entity_1.x + entity_1.w and
                     entity_1.y <= entity_2.y + entity_2.h and
                     entity_2.y <= entity_1.y + entity_1.h):
-                    entity_1.is_alive = False
-                    entity_2.is_alive = False
+                    entity_1.is_collision = True
+                    entity_2.is_collision = True
+                
 
 def entities_cleanup(entities):
     # entities[:]は引数entitiesのリストの中身を全部出して,右側の値([]の中身)をentitiesのリストに入れなおすというものである
@@ -67,7 +69,7 @@ class Bullet:
         self.w = BULLET_SIZE_X
         self.h = BULLET_SIZE_Y
         self.is_right = right
-        self.is_collision = True
+        self.is_collision = False
         self.is_alive = True
         if self.is_right:
             self.direction_x = 1
@@ -77,6 +79,9 @@ class Bullet:
         bullets.append(self)
 
     def update(self):
+        if self.is_collision:
+            self.is_alive = False
+
         if self.is_alive:
             self.x += BULLET_SPEED_X * self.direction_x
 
@@ -88,30 +93,55 @@ class Bullet:
 
 
     def draw(self):
-        if self.is_alive:
-            if self.is_right:
-                pyxel.blt(self.x, self.y, 1, 0, 0, self.w, self.h, pyxel.COLOR_BLACK)
-            else:
-                pyxel.blt(self.x, self.y, 1, 0, 0, -self.w, self.h, pyxel.COLOR_BLACK)
+        if self.is_right:
+            pyxel.blt(self.x, self.y, 1, 0, 0, self.w, self.h, pyxel.COLOR_BLACK)
+        else:
+            pyxel.blt(self.x, self.y, 1, 0, 0, -self.w, self.h, pyxel.COLOR_BLACK)
+
 
 class Enemy:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.w = ENEMY_SIZE_X
-        self.h = ENEMY_SIZE_Y
-        self.is_collision = True
+    def update(self):
+        pass
+    def draw(self):
+        pass
+
+class Mob(Enemy):
+    def __init(self, x, y):
+        super().__init__(x, y)
+
+    def update(self):
+        pass
+    def draw(self):
+        pass
+
+class Boss(Enemy):
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        
+        self.w = BOSS_SIZE_X
+        self.h = BOSS_SIZE_Y
+        self.is_collision = False
         self.is_alive = True
-        enemies.append(self)
+        self.hit_point = 3
+        boss.append(self)
         self.frame_interval = 10
         self.current_frame = 0
         self.frame_num = 4
     def update(self):
         self.current_frame = (pyxel.frame_count // self.frame_interval) % self.frame_num
+        if self.is_collision:
+            self.hit_point -= 1
+            self.is_collision = False
+        if self.hit_point <= 0:
+            self.is_alive = False
+
            
     def draw(self):
         
-        pyxel.blt(self.x, self.y, 2, self.current_frame * 64, 64, - self.w, self.h, pyxel.COLOR_BLACK)
+        pyxel.blt(self.x, self.y, 2, self.current_frame * BOSS_SIZE_X, 0, - self.w, self.h, pyxel.COLOR_BLACK)
 
 class Player:
     def __init__(self, x, y):
@@ -124,10 +154,16 @@ class Player:
         self.vy = 0
         self.pre_vx = 0
         self.vx = 0
+        self.invincible_time = 200
+        self.invincible_count = 0
+        self.is_invincible = False
 
         self.is_right = True
-        self.is_collision = True
+        self.is_collision = False
         self.is_alive = True
+        self.hit_point = 7
+
+        players.append(self)
 
         #init以外の関数で使う場合、selfを入れること
         self.jump_count = 0
@@ -136,6 +172,25 @@ class Player:
         
         
     def update(self):
+        if not self.is_invincible:
+            if self.is_collision:
+                self.hit_point -= 1
+                self.is_invincible = True
+                self.invincible_count = 0
+        else:
+            self.invincible_count += 1
+            
+        if self.invincible_count >= self.invincible_time:
+            self.is_invincible = False
+            self.is_collision = False
+
+        if self.hit_point <= 0:
+            self.is_alive = False
+        # if not self.is_collision:
+        #     self.is_collision = False
+        #     self.is_alive = True
+        
+
         #sin cos でルート2走法を禁止できるんじゃね？ sin^2+cos^2 = 1とか？
         direction_x = 0
         direction_y = 0
@@ -179,10 +234,11 @@ class Player:
             else:
                 Bullet(self.x - self.w // 2, self.y + self.h // 4, self.is_right)
 
-        if pyxel.frame_count % 60 == 0:
-            if len(enemies) < ENEMIES_MAX_NUM:
-                Enemy(random.randint(screen_width // 10 * 4, screen_width // 10 * 5),
-                      random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
+        
+        if pyxel.btnp(pyxel.KEY_R):
+            self.is_collision = False
+            self.is_alive = True
+            players.append(self)
                  
 
         
@@ -207,6 +263,12 @@ class Player:
         pyxel.text(10,10, f"self.x : {self.x}", pyxel.COLOR_LIME)
         pyxel.text(10,20, f"self.vx : {self.vx}", pyxel.COLOR_LIME)
         pyxel.text(10,30, f"self.y : {self.y}", pyxel.COLOR_LIME)
+        pyxel.text(10, 40, f"bullets: {len(bullets)}", pyxel.COLOR_GREEN)
+        pyxel.text(10,50, f"player is_collision : {self.is_collision}", pyxel.COLOR_LIME)
+        pyxel.text(10,60, f"player is_alive : {self.is_alive}", pyxel.COLOR_LIME)
+        pyxel.text(10,70, f"player hit_point : {self.hit_point}", pyxel.COLOR_LIME)
+        pyxel.text(10,80, f"player is_invincible : {self.is_invincible}", pyxel.COLOR_LIME)
+        pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
 
 class Background:
     def __init__(self):
@@ -249,10 +311,16 @@ class App:
     def update_play_scene(self):
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.scene = SCENE_GAME_OVER
+        
+        if pyxel.frame_count % 60 == 0:
+            if len(boss) < boss_MAX_NUM:
+                Boss(random.randint(screen_width // 10 * 4, screen_width // 10 * 5),
+                    random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
+                
+        self.background.update()
 
         
-        self.background.update()
-        self.player.update()
+        
 
         
 
@@ -266,13 +334,17 @@ class App:
         #上記のbulletクラスのupdate()の使い方を踏まえて,関数をつくる.
         #今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
         #書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
-        entities_check_collisions(bullets, enemies)
+        entities_check_collisions(bullets, boss)
+        entities_check_collisions(players, boss)
+        
         entities_update(bullets)
-        entities_update(enemies)
+        entities_update(boss)
+        self.player.update()
         
-        
-        entities_cleanup(enemies)
         entities_cleanup(bullets)
+        entities_cleanup(boss)
+        # entities_cleanup(players)
+        
         
 
         
@@ -317,7 +389,7 @@ class App:
         entities_draw(bullets)
         # for bullet in bullets:
         #     bullet.draw()
-        entities_draw(enemies)
+        entities_draw(boss)
 
     def draw_game_over_scene(self):
         pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Game Over", pyxel.COLOR_LIME)
