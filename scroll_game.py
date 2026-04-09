@@ -19,6 +19,8 @@ boss_MAX_NUM = 1
 BOSS_SIZE_X = 64
 BOSS_SIZE_Y = 64
 
+boss_attacks = []
+
 players = []
 PLAYER_SIZE_X = 16
 PLAYER_SIZE_Y = 16
@@ -26,6 +28,7 @@ PLAYER_SPEED = 5
 PLAYER_JUMP = 12
 GRAVITY = 9.8
 dt = 0.1
+
 
 #今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
 #書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
@@ -50,6 +53,9 @@ def entities_check_collisions(entities_1, entities_2):
                     entity_1.is_collision = True
                     entity_2.is_collision = True
                 
+                    
+
+                
 
 def entities_cleanup(entities):
     # entities[:]は引数entitiesのリストの中身を全部出して,右側の値([]の中身)をentitiesのリストに入れなおすというものである
@@ -60,7 +66,29 @@ def entities_cleanup(entities):
     entities[:] = [entity for entity in entities if entity.is_alive]
     # entities[:] = [entity.x for entity in entities if entity.is_alive]
 
+class Mud:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.vx = random.randint(-10, 10)
+        self.vy = -15
+        self.w = 32
+        self.h = 32
+        self.is_collision = False
+        self.is_alive = True
+        boss_attacks.append(self)
+        
+    def update(self):
+        self.vy += GRAVITY * dt
+        self.y += self.vy
+        self.x += self.vx
+        if not 0 <= self.y <= screen_height:
+            self.is_alive = False
+        if not 0 <= self.x <= screen_width:
+            self.is_alive = False
 
+    def draw(self):
+        pyxel.blt(self.x, self.y, 1, 0, 16, self.w, self.h, pyxel.COLOR_BLACK)
 
 class Bullet:
     def __init__(self, x, y, right):
@@ -125,23 +153,64 @@ class Boss(Enemy):
         self.h = BOSS_SIZE_Y
         self.is_collision = False
         self.is_alive = True
-        self.hit_point = 3
+        self.hit_point = 10
         boss.append(self)
         self.frame_interval = 10
         self.current_frame = 0
         self.frame_num = 4
+        self.current_state = 0
+        self.neutral = 0
+        self.attack1 = 1
+        self.state_timer = 0
     def update(self):
-        self.current_frame = (pyxel.frame_count // self.frame_interval) % self.frame_num
+        #-----------------大まかなモーションを書く
+        if self.current_state == self.neutral:
+            self.neutral_update()
+        elif self.current_state == self.attack1:
+            self.attack1_update()
+
+
+        
+
         if self.is_collision:
             self.hit_point -= 1
             self.is_collision = False
         if self.hit_point <= 0:
             self.is_alive = False
+        
+        #-----------------
+
+    def neutral_update(self):
+        self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num
+        self.state_timer += 1
+        if self.state_timer >= 40:
+            self.current_state = self.attack1
+            self.state_timer = 0
+            self.current_frame = 0
+            
+        
+    
+    def attack1_update(self):
+        self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num
+        self.state_timer += 1
+        if self.state_timer == 30:
+            for i in range(5):
+                Mud(random.randint(self.x + self.w // 2 - 50, self.x + self.w // 2 + 50), self.y)
+        if self.state_timer >= 40:
+            self.current_state = self.neutral
+            self.state_timer = 0
+            
+
+
+
 
            
     def draw(self):
+            pyxel.blt(self.x, self.y, 2, self.current_frame * BOSS_SIZE_X, self.current_state * 64, - self.w, self.h, pyxel.COLOR_BLACK)
+            pyxel.text(screen_width // 10 * 6, 10, f"BOSS", pyxel.COLOR_PINK)
+            pyxel.rect(screen_width // 10 * 6, 20, self.hit_point * 10, 10, pyxel.COLOR_PINK)
+            # pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
         
-        pyxel.blt(self.x, self.y, 2, self.current_frame * BOSS_SIZE_X, 0, - self.w, self.h, pyxel.COLOR_BLACK)
 
 class Player:
     def __init__(self, x, y):
@@ -154,7 +223,7 @@ class Player:
         self.vy = 0
         self.pre_vx = 0
         self.vx = 0
-        self.invincible_time = 200
+        self.invincible_time = 70
         self.invincible_count = 0
         self.is_invincible = False
 
@@ -172,17 +241,21 @@ class Player:
         
         
     def update(self):
+
         if not self.is_invincible:
             if self.is_collision:
                 self.hit_point -= 1
                 self.is_invincible = True
                 self.invincible_count = 0
+                
         else:
             self.invincible_count += 1
+            self.is_collision = False
+            
             
         if self.invincible_count >= self.invincible_time:
             self.is_invincible = False
-            self.is_collision = False
+            
 
         if self.hit_point <= 0:
             self.is_alive = False
@@ -197,15 +270,16 @@ class Player:
         self.pre_vx = self.vx
         self.vx = 0
         
+        self.axis_x = pyxel.btnv(pyxel.GAMEPAD1_AXIS_LEFTX)
 
-        if pyxel.btn(pyxel.KEY_RIGHT):
+        if pyxel.btn(pyxel.KEY_RIGHT) or pyxel.btn(pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT) or self.axis_x > 10000:
             direction_x += 1
             self.is_right = True
-        if pyxel.btn(pyxel.KEY_LEFT):
+        if pyxel.btn(pyxel.KEY_LEFT) or pyxel.btn(pyxel.GAMEPAD1_BUTTON_DPAD_LEFT) or self.axis_x < -10000:
             direction_x += -1
             self.is_right = False
         if self.jump_count < self.jump_max:
-            if pyxel.btnp(pyxel.KEY_UP):
+            if pyxel.btnp(pyxel.KEY_UP) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):#ボタンBと書いてあるが、今のコントローラだとAボタンに当たる
                 #最初は self.vy -= PLAYER_JUMP としていたが、これでは2回目のジャンプ時にプレイヤーが上昇中か下降中かでself.vyの状態が違うため2回目のジャンプの度合いが一定ではなくなる
                 self.vy = - PLAYER_JUMP
                 self.jump_count += 1
@@ -228,17 +302,14 @@ class Player:
             self.vx = (direction_x  / lengh) * PLAYER_SPEED #(direction_x  / lengh)はcosθ
             self.x += self.vx
 
-        if pyxel.btnp(pyxel.KEY_SPACE):
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_Y):#ボタンYと書いてあるが、今のコントローラだとXボタンに当たる
             if self.is_right:
                 Bullet(self.x + self.w, self.y + self.h // 4, self.is_right)
             else:
                 Bullet(self.x - self.w // 2, self.y + self.h // 4, self.is_right)
 
         
-        if pyxel.btnp(pyxel.KEY_R):
-            self.is_collision = False
-            self.is_alive = True
-            players.append(self)
+        
                  
 
         
@@ -246,6 +317,11 @@ class Player:
 
 
     def draw(self):
+        pyxel.text(10,10, f"PLAYER HP : {self.hit_point}", pyxel.COLOR_LIME)
+        for i in range(self.hit_point):
+            pyxel.rect(15 * i, 20, 10, 10, pyxel.COLOR_GREEN)
+        
+
         if self.vx == 0 and self.is_right and self.vy == 0:
             self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
             u = self.player_current_frame * 16
@@ -260,15 +336,15 @@ class Player:
             pyxel.blt(self.x, self.y, 0, 0, 0, - self.w, self.h, pyxel.COLOR_BLACK)#キャラの向きを左右反転させるため-self.w
         # pyxel.blt(x, y, img, u, v, w, h, colkey=None, rotate=0, scale=1)
         #text(x, y, s, col, font=None)
-        pyxel.text(10,10, f"self.x : {self.x}", pyxel.COLOR_LIME)
-        pyxel.text(10,20, f"self.vx : {self.vx}", pyxel.COLOR_LIME)
-        pyxel.text(10,30, f"self.y : {self.y}", pyxel.COLOR_LIME)
-        pyxel.text(10, 40, f"bullets: {len(bullets)}", pyxel.COLOR_GREEN)
-        pyxel.text(10,50, f"player is_collision : {self.is_collision}", pyxel.COLOR_LIME)
-        pyxel.text(10,60, f"player is_alive : {self.is_alive}", pyxel.COLOR_LIME)
-        pyxel.text(10,70, f"player hit_point : {self.hit_point}", pyxel.COLOR_LIME)
-        pyxel.text(10,80, f"player is_invincible : {self.is_invincible}", pyxel.COLOR_LIME)
-        pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
+        # pyxel.text(10,10, f"self.x : {self.x}", pyxel.COLOR_LIME)
+        # pyxel.text(10,20, f"self.vx : {self.vx}", pyxel.COLOR_LIME)
+        # pyxel.text(10,30, f"self.y : {self.y}", pyxel.COLOR_LIME)
+        # pyxel.text(10, 40, f"bullets: {len(bullets)}", pyxel.COLOR_GREEN)
+        # pyxel.text(10,50, f"player is_collision : {self.is_collision}", pyxel.COLOR_LIME)
+        # pyxel.text(10,60, f"player is_alive : {self.is_alive}", pyxel.COLOR_LIME)
+        # pyxel.text(10,70, f"player hit_point : {self.hit_point}", pyxel.COLOR_LIME)
+        # pyxel.text(10,80, f"player is_invincible : {self.is_invincible}", pyxel.COLOR_LIME)
+        # pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
 
 class Background:
     def __init__(self):
@@ -276,7 +352,7 @@ class Background:
     def update(self):
         pass
     def draw(self):
-        pass
+        pyxel.bltm(0, 0, 0, 0, 0, screen_width, screen_height, pyxel.COLOR_BLACK)
 
 
 
@@ -335,14 +411,17 @@ class App:
         #今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
         #書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
         entities_check_collisions(bullets, boss)
-        entities_check_collisions(players, boss)
+        entities_check_collisions(players, boss)#ここは[self.player]とするとplayerというオブジェクトをリストとして扱うことができる
+        entities_check_collisions(boss_attacks, players)
         
         entities_update(bullets)
         entities_update(boss)
+        entities_update(boss_attacks)
         self.player.update()
         
         entities_cleanup(bullets)
         entities_cleanup(boss)
+        entities_cleanup(boss_attacks)
         # entities_cleanup(players)
         
         
@@ -376,10 +455,11 @@ class App:
             self.draw_game_over_scene()
 
     def draw_title_scene(self):
-        pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Click To Start", pyxel.COLOR_LIME)
+        pyxel.rect(screen_width // 10 * 4, screen_height // 10 * 3, screen_width // 10 * 2, 20, pyxel.COLOR_NAVY)
+        pyxel.text(screen_width // 10 * 4 + 30, screen_height // 10 * 3 + 7, f"Start", pyxel.COLOR_LIME)
 
     def draw_play_scene(self):
-        pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Play", pyxel.COLOR_LIME)
+        pyxel.text(screen_width // 7 * 3 , screen_height // 2, f"Play", pyxel.COLOR_LIME)
 
         self.background.draw()
         self.player.draw()
@@ -390,6 +470,7 @@ class App:
         # for bullet in bullets:
         #     bullet.draw()
         entities_draw(boss)
+        entities_draw(boss_attacks)
 
     def draw_game_over_scene(self):
         pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Game Over", pyxel.COLOR_LIME)
