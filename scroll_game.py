@@ -6,8 +6,10 @@ screen_width = 400
 screen_height = 300
 
 SCENE_TITLE = 0
-SCENE_PLAY = 1
-SCENE_GAME_OVER = 2
+SCENE_CONTROLS = 1
+SCENE_PLAY = 2
+SCENE_GAME_OVER = 3
+ 
 
 bullets = []
 BULLET_SIZE_X = 8
@@ -194,7 +196,7 @@ class Boss(Enemy):
         self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num
         self.state_timer += 1
         if self.state_timer == 30:
-            for i in range(5):
+            for i in range(40):
                 Mud(random.randint(self.x + self.w // 2 - 50, self.x + self.w // 2 + 50), self.y)
         if self.state_timer >= 40:
             self.current_state = self.neutral
@@ -230,7 +232,7 @@ class Player:
         self.is_right = True
         self.is_collision = False
         self.is_alive = True
-        self.hit_point = 7
+        self.hit_point = 3
 
         players.append(self)
 
@@ -259,6 +261,7 @@ class Player:
 
         if self.hit_point <= 0:
             self.is_alive = False
+
         # if not self.is_collision:
         #     self.is_collision = False
         #     self.is_alive = True
@@ -366,6 +369,7 @@ class App:
 
 
         self.scene = SCENE_TITLE
+        self.menu_selection = SCENE_TITLE
 
         pyxel.run(self.update, self.draw)
 
@@ -375,18 +379,53 @@ class App:
 
         if self.scene == SCENE_TITLE:
             self.update_title_scene()
+        elif self.scene == SCENE_CONTROLS:
+            self.update_controls_scene()
         elif self.scene == SCENE_PLAY:
             self.update_play_scene()
         elif self.scene == SCENE_GAME_OVER:
             self.update_game_over_scene()
+        
+        
+        
+        
+        
 
     def update_title_scene(self):
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            self.scene = SCENE_PLAY
+        self.axis_y = pyxel.btnv(pyxel.GAMEPAD1_AXIS_LEFTY)
+        self.start_color = pyxel.COLOR_NAVY
+        self.controls_color = pyxel.COLOR_NAVY
+        if self.menu_selection == SCENE_TITLE:
+            self.start_color = pyxel.COLOR_YELLOW
+        elif self.menu_selection == SCENE_CONTROLS:
+            self.controls_color = pyxel.COLOR_YELLOW
+
+
+        if pyxel.btnp(pyxel.KEY_UP) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_UP) or 10000 <= self.axis_y:
+            self.menu_selection -= 1
+            if self.menu_selection < 0:
+                self.menu_selection = 1
+                
+        if pyxel.btnp(pyxel.KEY_DOWN) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_DOWN) or self.axis_y <= -10000:
+            self.menu_selection += 1
+            if self.menu_selection > 1:
+                self.menu_selection = 0
+
+        
+        
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
+            if self.menu_selection == 0:
+                self.scene = SCENE_PLAY
+            elif self.menu_selection == 1:
+                self.scene = SCENE_CONTROLS
+
+        
+        
+        
 
     def update_play_scene(self):
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            self.scene = SCENE_GAME_OVER
+        # if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        #     self.scene = SCENE_GAME_OVER
         
         if pyxel.frame_count % 60 == 0:
             if len(boss) < boss_MAX_NUM:
@@ -418,6 +457,9 @@ class App:
         entities_update(boss)
         entities_update(boss_attacks)
         self.player.update()
+
+        if not self.player.is_alive:
+            self.scene = SCENE_GAME_OVER
         
         entities_cleanup(bullets)
         entities_cleanup(boss)
@@ -433,7 +475,11 @@ class App:
         
 
     def update_game_over_scene(self):
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
+            self.scene = SCENE_TITLE
+    
+    def update_controls_scene(self):
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
             self.scene = SCENE_TITLE
         
 
@@ -449,14 +495,22 @@ class App:
 
         if self.scene == SCENE_TITLE:
             self.draw_title_scene()
+        elif self.scene == SCENE_CONTROLS:
+            self.draw_controls_scene()
         elif self.scene == SCENE_PLAY:
             self.draw_play_scene()
         elif self.scene == SCENE_GAME_OVER:
             self.draw_game_over_scene()
 
     def draw_title_scene(self):
-        pyxel.rect(screen_width // 10 * 4, screen_height // 10 * 3, screen_width // 10 * 2, 20, pyxel.COLOR_NAVY)
-        pyxel.text(screen_width // 10 * 4 + 30, screen_height // 10 * 3 + 7, f"Start", pyxel.COLOR_LIME)
+        pyxel.text(10,10, f"self.scene : {self.scene}", pyxel.COLOR_LIME)
+        pyxel.text(10,20, f"self.menu_selection : {self.menu_selection}", pyxel.COLOR_RED)
+
+        pyxel.rect(screen_width // 10 * 4, screen_height // 10 * 3, screen_width // 10 * 2, 20, self.start_color)
+        pyxel.text(screen_width // 10 * 4 + 30, screen_height // 10 * 3 + 7, f"Start", pyxel.COLOR_RED)
+
+        pyxel.rect(screen_width // 10 * 4, screen_height // 10 * 5, screen_width // 10 * 2, 20, self.controls_color)
+        pyxel.text(screen_width // 10 * 4 + 30, screen_height // 10 * 5 + 7, f"Controls", pyxel.COLOR_RED)
 
     def draw_play_scene(self):
         pyxel.text(screen_width // 7 * 3 , screen_height // 2, f"Play", pyxel.COLOR_LIME)
@@ -473,7 +527,16 @@ class App:
         entities_draw(boss_attacks)
 
     def draw_game_over_scene(self):
-        pyxel.text(screen_width // 7 * 3, screen_height // 2, f"Game Over", pyxel.COLOR_LIME)
+        pyxel.text(screen_width // 10 * 4, screen_height // 10 * 5, f"Game Over", pyxel.COLOR_LIME)
+        pyxel.text(screen_width // 10 * 4, screen_height // 10 * 7, f"Press A or B to continue", pyxel.COLOR_LIME)
+
+    def draw_controls_scene(self):
+        pyxel.text(50, 50, "--- HOW TO PLAY ---", pyxel.COLOR_YELLOW)
+        pyxel.text(50, 80, "Move  : D-PAD / Stick", pyxel.COLOR_WHITE)
+        pyxel.text(50, 100, "Jump  : A Button", pyxel.COLOR_WHITE)
+        pyxel.text(50, 120, "Shoot : X Button", pyxel.COLOR_WHITE)
+        
+        pyxel.text(50, 200, "Press Action Button to Return", pyxel.COLOR_GRAY)
         
 
 
