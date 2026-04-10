@@ -19,7 +19,7 @@ BULLET_SPEED_X = 10
 boss = []
 boss_MAX_NUM = 1
 BOSS_SIZE_X = 64
-BOSS_SIZE_Y = 64
+BOSS_SIZE_Y = 60
 
 boss_attacks = []
 
@@ -43,7 +43,7 @@ def entities_draw(entities):
             entity.draw()
             
 
-def entities_check_collisions(entities_1, entities_2):
+def entities_check_collisions(entities_1, entities_2, hit_switch_1, hit_switch_2):
         for entity_1 in entities_1:
             for entity_2 in entities_2:
                 if not entity_1.is_alive or not entity_2.is_alive:
@@ -52,8 +52,10 @@ def entities_check_collisions(entities_1, entities_2):
                     entity_2.x <= entity_1.x + entity_1.w and
                     entity_1.y <= entity_2.y + entity_2.h and
                     entity_2.y <= entity_1.y + entity_1.h):
-                    entity_1.is_collision = True
-                    entity_2.is_collision = True
+                    if hit_switch_1 == True:
+                        entity_1.is_collision = True
+                    if hit_switch_2 == True:
+                        entity_2.is_collision = True
                 
                     
 
@@ -157,28 +159,53 @@ class Boss(Enemy):
         self.is_alive = True
         self.hit_point = 10
         boss.append(self)
-        self.frame_interval = 10
+        self.frame_interval = 6
         self.current_frame = 0
         self.frame_num = 4
         self.current_state = 0
         self.neutral = 0
         self.attack1 = 1
+        self.attack2 = 2
+        self.guard = 3
         self.state_timer = 0
+
+
     def update(self):
         #-----------------大まかなモーションを書く
         if self.current_state == self.neutral:
             self.neutral_update()
         elif self.current_state == self.attack1:
             self.attack1_update()
+        elif self.current_state == self.attack2:
+            self.attack2_update()
+        elif self.current_state == self.guard:
+            self.guard_update()
 
 
         
 
         if self.is_collision:
-            self.hit_point -= 1
-            self.is_collision = False
+            if self.current_state != self.guard:
+                self.hit_point -= 1
+                self.is_collision = False
         if self.hit_point <= 0:
             self.is_alive = False
+
+        tile_x = (self.x + self.w // 2) // 8
+        tile_y = (self.y + self.h // 2) // 8
+
+        tile_info = pyxel.tilemaps[0].pget(tile_x, tile_y)
+        if tile_info == (0, 2):
+            self.y = tile_y * 8 - self.h
+            self.vy = 0
+
+        if len(players) > 0:
+            distance_x = abs(players[0].x - self.x)
+        if distance_x > 150:
+            self.current_state = self.guard
+        else:
+            self.current_state = self.neutral
+        
         
         #-----------------
 
@@ -193,14 +220,33 @@ class Boss(Enemy):
         
     
     def attack1_update(self):
-        self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num
+        #frame_intervalフレームに1回,フレームが進む. つまりframe_intervalが10なら10フレームで1枚分,キャラの絵が変わる.
+        #一連の動きのフレーム数が4なら,合計で40フレームないと一連の動きが描画しきれない
+        self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num 
         self.state_timer += 1
-        if self.state_timer == 30:
+        if self.state_timer == 20:
             for i in range(40):
                 Mud(random.randint(self.x + self.w // 2 - 50, self.x + self.w // 2 + 50), self.y)
-        if self.state_timer >= 40:
+        if self.state_timer >= 23:
             self.current_state = self.neutral
             self.state_timer = 0
+
+
+    def attack2_update(self):
+        #frame_intervalフレームに1回,フレームが進む. つまりframe_intervalが10なら10フレームで1枚分,キャラの絵が変わる.
+        #一連の動きのフレーム数が4なら,合計で40フレームないと一連の動きが描画しきれない
+        self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num 
+        self.state_timer += 1
+        if self.state_timer == 20:
+            for i in range(40):
+                Mud(random.randint(self.x + self.w // 2 - 50, self.x + self.w // 2 + 50), self.y)
+        if self.state_timer >= 23:
+            self.current_state = self.neutral
+            self.state_timer = 0
+
+    def guard_update(self):
+        self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num
+        self.state_timer += 1
             
 
 
@@ -208,7 +254,12 @@ class Boss(Enemy):
 
            
     def draw(self):
-            pyxel.blt(self.x, self.y, 2, self.current_frame * BOSS_SIZE_X, self.current_state * 64, - self.w, self.h, pyxel.COLOR_BLACK)
+            v = self.current_state * 64
+            # もしガード状態なら
+            if self.current_state == self.guard:
+                v = 128
+
+            pyxel.blt(self.x, self.y, 2, self.current_frame * BOSS_SIZE_X, v, - self.w, self.h, pyxel.COLOR_BLACK)
             pyxel.text(screen_width // 10 * 6, 10, f"BOSS", pyxel.COLOR_PINK)
             pyxel.rect(screen_width // 10 * 6, 20, self.hit_point * 10, 10, pyxel.COLOR_PINK)
             # pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
@@ -290,9 +341,15 @@ class Player:
 
         self.vy += GRAVITY * dt
         self.y += self.vy
-        
-        if self.y >= screen_height // 6 * 5:
-            self.y = screen_height // 6 * 5
+        # プレイヤーの足元の中央座標が、タイルマップの何マス目かを計算（8ピクセルで1マス）
+        tile_x = (self.x + self.w // 2) // 8
+        tile_y = (self.y + self.h) // 8
+
+        # tilemaps[0] のそのマスに、Imageバンクのどのタイルが置かれているかを取得
+        tile_info = pyxel.tilemaps[0].pget(tile_x, tile_y)
+
+        if tile_info == (0, 2):
+            self.y = tile_y * 8 - self.h
             self.vy = 0
         
             self.jump_count = 0
@@ -304,6 +361,11 @@ class Player:
             self.pre_vx = self.vx
             self.vx = (direction_x  / lengh) * PLAYER_SPEED #(direction_x  / lengh)はcosθ
             self.x += self.vx
+
+        if  self.x + self.w >= screen_width:
+            self.x = screen_width - self.w
+        elif self.x < 0:
+            self.x = 0
 
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_Y):#ボタンYと書いてあるが、今のコントローラだとXボタンに当たる
             if self.is_right:
@@ -322,7 +384,7 @@ class Player:
     def draw(self):
         pyxel.text(10,10, f"PLAYER HP : {self.hit_point}", pyxel.COLOR_LIME)
         for i in range(self.hit_point):
-            pyxel.rect(15 * i, 20, 10, 10, pyxel.COLOR_GREEN)
+            pyxel.rect(15 * i + 20, 20, 10, 10, pyxel.COLOR_GREEN)
         
 
         if self.vx == 0 and self.is_right and self.vy == 0:
@@ -363,11 +425,14 @@ class App:
     def __init__(self):
         pyxel.init(screen_width, screen_height, title = "scroll_game")
         pyxel.mouse(True)
+        self.mouse_x = 0
+        self.mouse_y = 0
         pyxel.load("my_resource.pyxres")
-        self.player = Player(screen_width // 3, screen_height // 5 * 2)
+        # self.player = Player(screen_width // 3, screen_height // 5 * 2)
         self.background = Background()
 
 
+        self.stick_cooldown = 0
         self.scene = SCENE_TITLE
         self.menu_selection = SCENE_TITLE
 
@@ -399,22 +464,31 @@ class App:
             self.start_color = pyxel.COLOR_YELLOW
         elif self.menu_selection == SCENE_CONTROLS:
             self.controls_color = pyxel.COLOR_YELLOW
+        
+        # スティックのクールダウンを減らす
+        if self.stick_cooldown > 0:
+            self.stick_cooldown -= 1
+            # スティックを中央に戻したら、すぐに次動かせるようにする
+            if abs(self.axis_y) < 5000:
+                self.stick_cooldown = 0
 
-
-        if pyxel.btnp(pyxel.KEY_UP) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_UP) or 10000 <= self.axis_y:
+        if pyxel.btnp(pyxel.KEY_UP) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_UP) or 10000 <= self.axis_y and self.stick_cooldown == 0:
             self.menu_selection -= 1
             if self.menu_selection < 0:
                 self.menu_selection = 1
+            self.stick_cooldown = 15
                 
-        if pyxel.btnp(pyxel.KEY_DOWN) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_DOWN) or self.axis_y <= -10000:
+        if pyxel.btnp(pyxel.KEY_DOWN) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_DOWN) or self.axis_y <= -10000 and self.stick_cooldown == 0:
             self.menu_selection += 1
             if self.menu_selection > 1:
                 self.menu_selection = 0
+            self.stick_cooldown = 15
 
         
         
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
             if self.menu_selection == 0:
+                self.reset_game()
                 self.scene = SCENE_PLAY
             elif self.menu_selection == 1:
                 self.scene = SCENE_CONTROLS
@@ -426,11 +500,12 @@ class App:
     def update_play_scene(self):
         # if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
         #     self.scene = SCENE_GAME_OVER
+        self.mouse_x = pyxel.mouse_x
+        self.mouse_y = pyxel.mouse_y
         
-        if pyxel.frame_count % 60 == 0:
-            if len(boss) < boss_MAX_NUM:
-                Boss(random.randint(screen_width // 10 * 4, screen_width // 10 * 5),
-                    random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
+        if len(boss) < boss_MAX_NUM:
+            Boss(random.randint(screen_width // 10 * 4, screen_width // 10 * 5),
+                random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
                 
         self.background.update()
 
@@ -449,9 +524,9 @@ class App:
         #上記のbulletクラスのupdate()の使い方を踏まえて,関数をつくる.
         #今後もBulletクラスのようなリストで管理しないといけないようなたくさんのオブジェクト生成が予想される場合,クラスごとに上記のfor文を
         #書かずに済むようにする.Enemyクラスなどを作るかもしれないしな
-        entities_check_collisions(bullets, boss)
-        entities_check_collisions(players, boss)#ここは[self.player]とするとplayerというオブジェクトをリストとして扱うことができる
-        entities_check_collisions(boss_attacks, players)
+        entities_check_collisions(bullets, boss, hit_switch_1 = True, hit_switch_2 = True)
+        entities_check_collisions(players, boss, hit_switch_1 = True, hit_switch_2 = False)#ここは[self.player]とするとplayerというオブジェクトをリストとして扱うことができる
+        entities_check_collisions(boss_attacks, players, hit_switch_1 = True, hit_switch_2 = True)
         
         entities_update(bullets)
         entities_update(boss)
@@ -476,11 +551,22 @@ class App:
 
     def update_game_over_scene(self):
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
+            
             self.scene = SCENE_TITLE
     
     def update_controls_scene(self):
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
             self.scene = SCENE_TITLE
+
+    def reset_game(self):
+        bullets.clear()
+        boss.clear()
+        boss_attacks.clear()
+        players.clear()
+
+        self.player = Player(screen_width // 3, screen_height // 400 * 376)
+
+
         
 
 
@@ -513,7 +599,9 @@ class App:
         pyxel.text(screen_width // 10 * 4 + 30, screen_height // 10 * 5 + 7, f"Controls", pyxel.COLOR_RED)
 
     def draw_play_scene(self):
-        pyxel.text(screen_width // 7 * 3 , screen_height // 2, f"Play", pyxel.COLOR_LIME)
+        pyxel.text(screen_width // 7 * 3 , screen_height // 6 * 3, f"mouse_x: {self.mouse_x}", pyxel.COLOR_LIME)
+        pyxel.text(screen_width // 7 * 3 , screen_height // 6 * 2, f"mouse_y: {self.mouse_y}", pyxel.COLOR_LIME)
+        
 
         self.background.draw()
         self.player.draw()
@@ -537,7 +625,9 @@ class App:
         pyxel.text(50, 120, "Shoot : X Button", pyxel.COLOR_WHITE)
         
         pyxel.text(50, 200, "Press Action Button to Return", pyxel.COLOR_GRAY)
-        
+
+    
+                
 
 
 
