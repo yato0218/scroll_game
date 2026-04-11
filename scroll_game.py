@@ -9,6 +9,7 @@ SCENE_TITLE = 0
 SCENE_CONTROLS = 1
 SCENE_PLAY = 2
 SCENE_GAME_OVER = 3
+SCENE_CLEAR = 4
  
 
 bullets = []
@@ -152,12 +153,13 @@ class Mob(Enemy):
 class Boss(Enemy):
     def __init__(self, x, y):
         super().__init__(x, y)
-        
+        self.vx = 0
+        self.vy = 0
         self.w = BOSS_SIZE_X
         self.h = BOSS_SIZE_Y
         self.is_collision = False
         self.is_alive = True
-        self.hit_point = 10
+        self.hit_point = 15
         boss.append(self)
         self.frame_interval = 6
         self.current_frame = 0
@@ -168,9 +170,27 @@ class Boss(Enemy):
         self.attack2 = 2
         self.guard = 3
         self.state_timer = 0
+        self.damage_timer = 0
+
+        self.gurad_distance = 100
+
+        self.intro_timer = 90 # 1.5秒間動かない
+        self.display_hp = 0   # ゲージを0からギュイーンと増やす用
 
 
     def update(self):
+
+        if self.intro_timer > 0:
+            self.intro_timer -= 1
+            # HPゲージを徐々に増やす
+            if self.display_hp < self.hit_point:
+                self.display_hp += self.hit_point / 90
+            # 待機モーションだけは再生しておく
+            self.current_frame = (pyxel.frame_count // self.frame_interval) % self.frame_num
+            return
+
+
+
         #-----------------大まかなモーションを書く
         if self.current_state == self.neutral:
             self.neutral_update()
@@ -188,23 +208,47 @@ class Boss(Enemy):
             if self.current_state != self.guard:
                 self.hit_point -= 1
                 self.is_collision = False
+                self.damage_timer = 15 #15フレーム点滅させる
+                if self.hit_point > 0:
+                    pyxel.play(2, 1)   #ダメージ音
+            else:
+                self.is_collision = False 
+                pyxel.play(2, 4)          # ガード音
+
         if self.hit_point <= 0:
             self.is_alive = False
+            
+        # 点滅タイマーを減らす
+        if self.damage_timer > 0:
+            self.damage_timer -= 1
 
         tile_x = (self.x + self.w // 2) // 8
         tile_y = (self.y + self.h // 2) // 8
 
         tile_info = pyxel.tilemaps[0].pget(tile_x, tile_y)
-        if tile_info == (0, 2):
+        if tile_info == (0, 2) or tile_info == (0,3):
             self.y = tile_y * 8 - self.h
             self.vy = 0
 
         if len(players) > 0:
             distance_x = abs(players[0].x - self.x)
-        if distance_x > 150:
+        if distance_x > self.gurad_distance:
             self.current_state = self.guard
-        else:
-            self.current_state = self.neutral
+        elif self.current_state == self.guard:
+                self.current_state = self.neutral
+                self.state_timer = 0
+
+
+        self.vy += GRAVITY * dt
+        self.y += self.vy
+
+        tile_x = (self.x + self.w // 2) // 8
+        tile_y = (self.y + self.h) // 8 # ※Bossの高さに合わせて調整
+
+        tile_info = pyxel.tilemaps[0].pget(tile_x, tile_y)
+        if tile_info == (0, 2)or tile_info == (0,3):
+            self.y = tile_y * 8 - self.h
+            self.vy = 0
         
         
         #-----------------
@@ -212,6 +256,17 @@ class Boss(Enemy):
     def neutral_update(self):
         self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num
         self.state_timer += 1
+        if len(players) > 0:
+            if players[0].x > self.x:
+                self.vx = 1   # 右へ
+            else:
+                self.vx = -1  # 左へ
+        self.x += self.vx
+
+        #ランダムでジャンプ（1%の確率でピョンと跳ぶ）
+        # ※ self.vy == 0 は地面にいるときの簡易判定
+        if self.vy == 0 and random.randint(1, 10) == 1:
+            self.vy = -8
         if self.state_timer >= 40:
             self.current_state = self.attack1
             self.state_timer = 0
@@ -225,7 +280,8 @@ class Boss(Enemy):
         self.current_frame = (self.state_timer // self.frame_interval) % self.frame_num 
         self.state_timer += 1
         if self.state_timer == 20:
-            for i in range(40):
+            pyxel.play(3, 3)
+            for i in range(15):
                 Mud(random.randint(self.x + self.w // 2 - 50, self.x + self.w // 2 + 50), self.y)
         if self.state_timer >= 23:
             self.current_state = self.neutral
@@ -258,11 +314,20 @@ class Boss(Enemy):
             # もしガード状態なら
             if self.current_state == self.guard:
                 v = 128
-
-            pyxel.blt(self.x, self.y, 2, self.current_frame * BOSS_SIZE_X, v, - self.w, self.h, pyxel.COLOR_BLACK)
+            if getattr(self, 'damage_timer', 0) > 0 and pyxel.frame_count % 4 < 2:
+                pass # 点滅中はボスの姿を描かない！
+            else:
+                if players[0].x > self.x:
+                    pyxel.blt(self.x, self.y + 8, 2, self.current_frame * BOSS_SIZE_X, v, + self.w, self.h, pyxel.COLOR_BLACK)   # 右へ
+                else:
+                    pyxel.blt(self.x, self.y +8, 2, self.current_frame * BOSS_SIZE_X, v, - self.w, self.h, pyxel.COLOR_BLACK)  # 左へ
+                
             pyxel.text(screen_width // 10 * 6, 10, f"BOSS", pyxel.COLOR_PINK)
-            pyxel.rect(screen_width // 10 * 6, 20, self.hit_point * 10, 10, pyxel.COLOR_PINK)
+            pyxel.rect(screen_width // 10 * 6, 20, self.display_hp * 10, 10, pyxel.COLOR_PINK)
             # pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
+            # pyxel.text(screen_width // 10 * 6, 10, f"BOSS", pyxel.COLOR_PINK)
+            # # ★ hit_point ではなく display_hp を使って四角を描く！
+            # pyxel.rect(screen_width // 10 * 6, 20, self.display_hp * 10, 10, pyxel.COLOR_PINK)
         
 
 class Player:
@@ -298,6 +363,7 @@ class Player:
         if not self.is_invincible:
             if self.is_collision:
                 self.hit_point -= 1
+                pyxel.play(1, 1) # ダメージ音
                 self.is_invincible = True
                 self.invincible_count = 0
                 
@@ -312,6 +378,7 @@ class Player:
 
         if self.hit_point <= 0:
             self.is_alive = False
+            pyxel.play(1, 2) # やられた音
 
         # if not self.is_collision:
         #     self.is_collision = False
@@ -340,6 +407,8 @@ class Player:
 
 
         self.vy += GRAVITY * dt
+        if self.vy > 7:
+            self.vy = 7
         self.y += self.vy
         # プレイヤーの足元の中央座標が、タイルマップの何マス目かを計算（8ピクセルで1マス）
         tile_x = (self.x + self.w // 2) // 8
@@ -369,8 +438,10 @@ class Player:
 
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_Y):#ボタンYと書いてあるが、今のコントローラだとXボタンに当たる
             if self.is_right:
+                pyxel.play(3, 10)
                 Bullet(self.x + self.w, self.y + self.h // 4, self.is_right)
             else:
+                pyxel.play(3, 10)
                 Bullet(self.x - self.w // 2, self.y + self.h // 4, self.is_right)
 
         
@@ -386,19 +457,21 @@ class Player:
         for i in range(self.hit_point):
             pyxel.rect(15 * i + 20, 20, 10, 10, pyxel.COLOR_GREEN)
         
-
-        if self.vx == 0 and self.is_right and self.vy == 0:
-            self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
-            u = self.player_current_frame * 16
-            pyxel.blt(self.x, self.y, 0, u, 0, self.w, self.h, pyxel.COLOR_BLACK)
-        elif self.vx == 0 and not self.is_right and self.vy == 0:
-            self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
-            u = self.player_current_frame * 16
-            pyxel.blt(self.x, self.y, 0, u, 0, - self.w, self.h, pyxel.COLOR_BLACK)
-        elif self.vx >= 0 and self.is_right:
-            pyxel.blt(self.x, self.y, 0, 0, 0, self.w, self.h, pyxel.COLOR_BLACK)
-        elif self.vx <= 0 and not self.is_right:
-            pyxel.blt(self.x, self.y, 0, 0, 0, - self.w, self.h, pyxel.COLOR_BLACK)#キャラの向きを左右反転させるため-self.w
+        if self.is_invincible and pyxel.frame_count % 4 < 2:
+            pass # 何も描かない！
+        else:
+            if self.vx == 0 and self.is_right and self.vy == 0:
+                self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
+                u = self.player_current_frame * 16
+                pyxel.blt(self.x, self.y, 0, u, 0, self.w, self.h, pyxel.COLOR_BLACK)
+            elif self.vx == 0 and not self.is_right and self.vy == 0:
+                self.player_current_frame = (pyxel.frame_count // self.frame_interval) % self.player_frame_num
+                u = self.player_current_frame * 16
+                pyxel.blt(self.x, self.y, 0, u, 0, - self.w, self.h, pyxel.COLOR_BLACK)
+            elif self.vx >= 0 and self.is_right:
+                pyxel.blt(self.x, self.y, 0, 0, 0, self.w, self.h, pyxel.COLOR_BLACK)
+            elif self.vx <= 0 and not self.is_right:
+                pyxel.blt(self.x, self.y, 0, 0, 0, - self.w, self.h, pyxel.COLOR_BLACK)#キャラの向きを左右反転させるため-self.w
         # pyxel.blt(x, y, img, u, v, w, h, colkey=None, rotate=0, scale=1)
         #text(x, y, s, col, font=None)
         # pyxel.text(10,10, f"self.x : {self.x}", pyxel.COLOR_LIME)
@@ -441,6 +514,10 @@ class App:
     def update(self):
         if pyxel.btnp(pyxel.KEY_Q):
             pyxel.quit()
+        
+        if pyxel.btnp(pyxel.GAMEPAD1_BUTTON_RIGHTSTICK):
+            pyxel.stop() # BGMや効果音を一旦リセット
+            self.scene = SCENE_TITLE
 
         if self.scene == SCENE_TITLE:
             self.update_title_scene()
@@ -450,6 +527,8 @@ class App:
             self.update_play_scene()
         elif self.scene == SCENE_GAME_OVER:
             self.update_game_over_scene()
+        elif self.scene == SCENE_CLEAR:
+            self.update_clear_scene()
         
         
         
@@ -474,12 +553,14 @@ class App:
 
         if pyxel.btnp(pyxel.KEY_UP) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_UP) or 10000 <= self.axis_y and self.stick_cooldown == 0:
             self.menu_selection -= 1
+            pyxel.play(0, 0) # ★カーソル移動音
             if self.menu_selection < 0:
                 self.menu_selection = 1
             self.stick_cooldown = 15
                 
         if pyxel.btnp(pyxel.KEY_DOWN) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_DOWN) or self.axis_y <= -10000 and self.stick_cooldown == 0:
             self.menu_selection += 1
+            pyxel.play(0, 0) # ★カーソル移動音
             if self.menu_selection > 1:
                 self.menu_selection = 0
             self.stick_cooldown = 15
@@ -487,6 +568,7 @@ class App:
         
         
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
+            pyxel.play(0, 0) # ★カーソル移動音
             if self.menu_selection == 0:
                 self.reset_game()
                 self.scene = SCENE_PLAY
@@ -502,10 +584,14 @@ class App:
         #     self.scene = SCENE_GAME_OVER
         self.mouse_x = pyxel.mouse_x
         self.mouse_y = pyxel.mouse_y
+
+        if pyxel.frame_count % 60 == 0 and not hasattr(self, 'boss_spawned'):
+            pass # 1回目の60フレーム目まで待つための工夫
         
-        if len(boss) < boss_MAX_NUM:
+        if len(boss) < boss_MAX_NUM and getattr(self, 'boss_spawned', False) == False:
             Boss(random.randint(screen_width // 10 * 4, screen_width // 10 * 5),
-                random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
+                 random.randint(screen_height // 10 * 7, screen_height // 10 * 8))
+            self.boss_spawned = True
                 
         self.background.update()
 
@@ -531,10 +617,24 @@ class App:
         entities_update(bullets)
         entities_update(boss)
         entities_update(boss_attacks)
-        self.player.update()
+        #ボスが存在していて、かつイントロ中ならプレイヤーのupdateを呼ばない
+        if len(boss) > 0 and boss[0].intro_timer > 0:
+            pass # イントロ中はプレイヤーは動けない
+        else:
+            self.player.update() # 通常時は動ける
 
         if not self.player.is_alive:
+            if self.scene != SCENE_GAME_OVER: # 1回だけ実行する工夫
+                pyxel.stop()     # BGMを止める
+                pyxel.play(0, 8) # ゲームオーバー音
             self.scene = SCENE_GAME_OVER
+
+        # ボスを倒した時
+        if getattr(self, 'boss_spawned', False) == True and len(boss) == 0:
+            if self.scene != SCENE_CLEAR: # 1回だけ実行する工夫
+                pyxel.stop()     # BGMを止める
+                pyxel.play(0, 9) # クリア音
+            self.scene = SCENE_CLEAR
         
         entities_cleanup(bullets)
         entities_cleanup(boss)
@@ -554,6 +654,10 @@ class App:
             
             self.scene = SCENE_TITLE
     
+    def update_clear_scene(self):
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
+            self.scene = SCENE_TITLE
+    
     def update_controls_scene(self):
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
             self.scene = SCENE_TITLE
@@ -564,7 +668,10 @@ class App:
         boss_attacks.clear()
         players.clear()
 
-        self.player = Player(screen_width // 3, screen_height // 400 * 376)
+        self.player = Player(screen_width // 3, 7* screen_height // 10)
+
+        self.boss_spawned = False # ボス復活フラグ
+        pyxel.playm(0, loop=True) # バトルBGMループ再生
 
 
         
@@ -587,6 +694,8 @@ class App:
             self.draw_play_scene()
         elif self.scene == SCENE_GAME_OVER:
             self.draw_game_over_scene()
+        elif self.scene == SCENE_CLEAR: 
+            self.draw_clear_scene()
 
     def draw_title_scene(self):
         pyxel.text(10,10, f"self.scene : {self.scene}", pyxel.COLOR_LIME)
@@ -616,6 +725,10 @@ class App:
 
     def draw_game_over_scene(self):
         pyxel.text(screen_width // 10 * 4, screen_height // 10 * 5, f"Game Over", pyxel.COLOR_LIME)
+        pyxel.text(screen_width // 10 * 4, screen_height // 10 * 7, f"Press A or B to continue", pyxel.COLOR_LIME)
+
+    def draw_clear_scene(self):
+        pyxel.text(screen_width // 10 * 4, screen_height // 10 * 5, f"GAME CLEAR!!", pyxel.COLOR_YELLOW)
         pyxel.text(screen_width // 10 * 4, screen_height // 10 * 7, f"Press A or B to continue", pyxel.COLOR_LIME)
 
     def draw_controls_scene(self):
