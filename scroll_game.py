@@ -159,7 +159,7 @@ class Boss(Enemy):
         self.h = BOSS_SIZE_Y
         self.is_collision = False
         self.is_alive = True
-        self.hit_point = 15
+        self.hit_point = 25
         boss.append(self)
         self.frame_interval = 6
         self.current_frame = 0
@@ -175,7 +175,7 @@ class Boss(Enemy):
         self.gurad_distance = 100
 
         self.intro_timer = 90 # 1.5秒間動かない
-        self.display_hp = 0   # ゲージを0からギュイーンと増やす用
+        self.display_hp = 0   # ゲージを0からいい感じに？増やす用
 
 
     def update(self):
@@ -207,6 +207,7 @@ class Boss(Enemy):
         if self.is_collision:
             if self.current_state != self.guard:
                 self.hit_point -= 1
+                self.display_hp = self.hit_point
                 self.is_collision = False
                 self.damage_timer = 15 #15フレーム点滅させる
                 if self.hit_point > 0:
@@ -231,7 +232,7 @@ class Boss(Enemy):
             self.vy = 0
 
         if len(players) > 0:
-            distance_x = abs(players[0].x - self.x)
+            distance_x = abs((players[0].x + players[0].w / 2) - (self.x + self.w / 2))
         if distance_x > self.gurad_distance:
             self.current_state = self.guard
         elif self.current_state == self.guard:
@@ -264,7 +265,7 @@ class Boss(Enemy):
         self.x += self.vx
 
         #ランダムでジャンプ（1%の確率でピョンと跳ぶ）
-        # ※ self.vy == 0 は地面にいるときの簡易判定
+        #self.vy == 0 は地面にいるときの簡易判定
         if self.vy == 0 and random.randint(1, 10) == 1:
             self.vy = -8
         if self.state_timer >= 40:
@@ -322,11 +323,10 @@ class Boss(Enemy):
                 else:
                     pyxel.blt(self.x, self.y +8, 2, self.current_frame * BOSS_SIZE_X, v, - self.w, self.h, pyxel.COLOR_BLACK)  # 左へ
                 
-            pyxel.text(screen_width // 10 * 6, 10, f"BOSS", pyxel.COLOR_PINK)
-            pyxel.rect(screen_width // 10 * 6, 20, self.display_hp * 10, 10, pyxel.COLOR_PINK)
+            pyxel.text(screen_width // 10 * 6, 50, f"BOSS", pyxel.COLOR_PINK)
+            pyxel.rect(screen_width // 10 * 6, 60, self.display_hp * 10, 10, pyxel.COLOR_PINK)
             # pyxel.text(10,90, f"player invincible_count : {self.invincible_count}", pyxel.COLOR_LIME)
             # pyxel.text(screen_width // 10 * 6, 10, f"BOSS", pyxel.COLOR_PINK)
-            # # ★ hit_point ではなく display_hp を使って四角を描く！
             # pyxel.rect(screen_width // 10 * 6, 20, self.display_hp * 10, 10, pyxel.COLOR_PINK)
         
 
@@ -348,7 +348,7 @@ class Player:
         self.is_right = True
         self.is_collision = False
         self.is_alive = True
-        self.hit_point = 3
+        self.hit_point = 10
 
         players.append(self)
 
@@ -436,7 +436,7 @@ class Player:
         elif self.x < 0:
             self.x = 0
 
-        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_Y):#ボタンYと書いてあるが、今のコントローラだとXボタンに当たる
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_Y or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_X)):#ボタンYと書いてあるが、今のコントローラだとXボタンに当たる
             if self.is_right:
                 pyxel.play(3, 10)
                 Bullet(self.x + self.w, self.y + self.h // 4, self.is_right)
@@ -453,9 +453,9 @@ class Player:
 
 
     def draw(self):
-        pyxel.text(10,10, f"PLAYER HP : {self.hit_point}", pyxel.COLOR_LIME)
+        pyxel.text(10,50, f"PLAYER HP : {self.hit_point}", pyxel.COLOR_LIME)
         for i in range(self.hit_point):
-            pyxel.rect(15 * i + 20, 20, 10, 10, pyxel.COLOR_GREEN)
+            pyxel.rect(15 * i + 20, 60, 10, 10, pyxel.COLOR_GREEN)
         
         if self.is_invincible and pyxel.frame_count % 4 < 2:
             pass # 何も描かない！
@@ -567,7 +567,7 @@ class App:
 
         
         
-        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B):
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A):
             pyxel.play(0, 0) # ★カーソル移動音
             if self.menu_selection == 0:
                 self.reset_game()
@@ -708,8 +708,8 @@ class App:
         pyxel.text(screen_width // 10 * 4 + 30, screen_height // 10 * 5 + 7, f"Controls", pyxel.COLOR_RED)
 
     def draw_play_scene(self):
-        pyxel.text(screen_width // 7 * 3 , screen_height // 6 * 3, f"mouse_x: {self.mouse_x}", pyxel.COLOR_LIME)
-        pyxel.text(screen_width // 7 * 3 , screen_height // 6 * 2, f"mouse_y: {self.mouse_y}", pyxel.COLOR_LIME)
+        # pyxel.text(screen_width // 7 * 3 , screen_height // 6 * 3, f"mouse_x: {self.mouse_x}", pyxel.COLOR_LIME)
+        # pyxel.text(screen_width // 7 * 3 , screen_height // 6 * 2, f"mouse_y: {self.mouse_y}", pyxel.COLOR_LIME)
         
 
         self.background.draw()
